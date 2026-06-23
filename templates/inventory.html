@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}مدیریت انبار - حسابداری شخصی{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h4><i class="bi bi-box-seam text-primary"></i> 📦 مدیریت انبار</h4>
+    </div>
+</div>
+
+{% if low_items %}
+<div class="alert alert-danger">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>کالاهای زیر حداقل موجودی:</strong>
+    {% for item in low_items %}
+    {{ item[1] }} ({{ item[4] }} {{ item[2] }}){% if not loop.last %}، {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- دکمه‌ها -->
+<div class="mb-3 d-flex gap-2 flex-wrap">
+    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addItemModal">
+        <i class="bi bi-plus-circle"></i> افزودن کالا
+    </button>
+    <form action="{{ url_for('import_inventory_excel') }}" method="POST" enctype="multipart/form-data" class="d-inline">
+        <label class="btn btn-outline-success">
+            <i class="bi bi-upload"></i> ایمپورت از اکسل
+            <input type="file" name="file" accept=".xlsx,.xls" hidden onchange="this.form.submit()">
+        </label>
+    </form>
+</div>
+
+<!-- جستجو -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <label class="fw-bold">جستجوی سریع:</label>
+            </div>
+            <div class="col">
+                <input type="text" id="searchItem" class="form-control form-control-sm" placeholder="نام کالا را تایپ کنید...">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- جدول کالاها -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="itemsTable" class="table table-hover table-striped">
+                <thead>
+                    <tr>
+                        <th>نام کالا</th>
+                        <th>واحد</th>
+                        <th>قیمت خرید</th>
+                        <th>موجودی اولیه</th>
+                        <th>موجودی فعلی</th>
+                        <th>حداقل موجودی</th>
+                        <th>ارزش موجودی</th>
+                        <th>عملیات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr class="{% if item.min_stock > 0 and item.current_stock <= item.min_stock %}table-danger{% endif %}">
+                        <td class="fw-bold">{{ item.name }}</td>
+                        <td>{{ item.unit }}</td>
+                        <td class="text-center">{{ "{:,.0f}".format(item.buy_price) }}</td>
+                        <td class="text-center">{{ "{:,.2f}".format(item.initial_stock) }}</td>
+                        <td class="text-center fw-bold {% if item.current_stock < 0 %}text-danger{% endif %}">
+                            {{ "{:,.2f}".format(item.current_stock) }}
+                        </td>
+                        <td class="text-center">{{ "{:,.2f}".format(item.min_stock) }}</td>
+                        <td class="text-center">{{ "{:,.0f}".format(item.value) }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-warning" onclick="editItem({{ item.id }}, '{{ item.name }}', '{{ item.unit }}', {{ item.buy_price }}, {{ item.initial_stock }}, {{ item.current_stock }}, {{ item.min_stock }})" title="ویرایش">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <form action="{{ url_for('delete_item', item_id=item.id) }}" method="POST" class="d-inline" onsubmit="return confirm('آیا از حذف این کالا مطمئن هستید؟')">
+                                    <button type="submit" class="btn btn-outline-danger" title="حذف">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- خلاصه -->
+<div class="row mb-3">
+    <div class="col-md-4">
+        <div class="summary-card">
+            <h5>تعداد کالا</h5>
+            <div class="value text-primary">{{ items|length }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="summary-card">
+            <h5>ارزش کل موجودی</h5>
+            <div class="value text-primary">{{ "{:,.0f}".format(total_value) }} ریال</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="summary-card">
+            <h5>کالاهای کم‌موجودی</h5>
+            <div class="value text-danger">{{ low_items|length }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- گزارش تاریخچه -->
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-clock-history"></i> 📋 گزارش تاریخچه انبار</div>
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('inventory') }}">
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">کالا:</label>
+                    <select name="item" class="form-select">
+                        <option value="همه" {{ 'selected' if selected_item == 'همه' }}>همه</option>
+                        {% for name in item_names %}
+                        <option value="{{ name }}" {{ 'selected' if selected_item == name }}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">نوع:</label>
+                    <select name="type" class="form-select">
+                        <option value="همه" {{ 'selected' if selected_type == 'همه' }}>همه</option>
+                        <option value="entry" {{ 'selected' if selected_type == 'entry' }}>ورود</option>
+                        <option value="exit" {{ 'selected' if selected_type == 'exit' }}>خروج</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> نمایش گزارش
+                    </button>
+                </div>
+            </div>
+        </form>
+        
+        <div class="table-responsive">
+            <table class="table table-hover table-striped table-sm">
+                <thead>
+                    <tr>
+                        <th>تاریخ</th>
+                        <th>کالا</th>
+                        <th>واحد</th>
+                        <th>مقدار</th>
+                        <th>قیمت واحد</th>
+                        <th>نوع</th>
+                        <th>شخص/محل</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report %}
+                    <tr>
+                        <td>{{ row.date }}</td>
+                        <td>{{ row.item_name }}</td>
+                        <td>{{ row.unit }}</td>
+                        <td class="text-center">{{ "{:,.2f}".format(row.quantity) }}</td>
+                        <td class="text-center">{{ "{:,.0f}".format(row.unit_price) }}</td>
+                        <td>
+                            {% if row.type == 'entry' %}
+                            <span class="badge bg-success">ورود ✅</span>
+                            {% else %}
+                            <span class="badge bg-danger">خروج ❌</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ row.entity }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="mt-2">
+            <span class="fw-bold">
+                📦 جمع ورود: {{ "{:,.2f}".format(total_entry) }} |
+                📤 جمع خروج: {{ "{:,.2f}".format(total_exit) }} |
+                📊 تراز: {{ "{:,.2f}".format(total_entry - total_exit) }} |
+                تعداد ردیف: {{ report|length }}
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- مودال افزودن کالا -->
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('add_item') }}" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-plus-circle"></i> افزودن کالای جدید</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">نام کالا *</label>
+                        <input type="text" name="name" class="form-control" required placeholder="نام کالا...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">واحد</label>
+                        <select name="unit" class="form-select">
+                            {% for u in units %}
+                            <option value="{{ u }}">{{ u }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">قیمت خرید (هر واحد)</label>
+                        <input type="text" name="buy_price" class="form-control" placeholder="مثلاً: 50,000" oninput="formatAmount(this)">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">موجودی اولیه</label>
+                        <input type="number" name="initial_stock" class="form-control" value="0" step="any">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">حداقل موجودی</label>
+                        <input type="number" name="min_stock" class="form-control" value="0" step="any">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">انصراف</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-check-lg"></i> ذخیره</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- مودال ویرایش کالا -->
+<div class="modal fade" id="editItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="editItemForm" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-pencil"></i> ویرایش کالا</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">نام کالا *</label>
+                        <input type="text" name="name" id="edit_name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">واحد</label>
+                        <select name="unit" id="edit_unit" class="form-select">
+                            {% for u in units %}
+                            <option value="{{ u }}">{{ u }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">قیمت خرید</label>
+                        <input type="text" name="buy_price" id="edit_buy_price" class="form-control" oninput="formatAmount(this)">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">موجودی اولیه</label>
+                        <input type="number" name="initial_stock" id="edit_initial_stock" class="form-control" step="any">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">موجودی فعلی</label>
+                        <input type="number" name="current_stock" id="edit_current_stock" class="form-control" step="any">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">حداقل موجودی</label>
+                        <input type="number" name="min_stock" id="edit_min_stock" class="form-control" step="any">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">انصراف</button>
+                    <button type="submit" class="btn btn-warning"><i class="bi bi-check-lg"></i> ذخیره تغییرات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    var table = $('#itemsTable').DataTable({
+        language: {
+            search: "جستجو:",
+            lengthMenu: "نمایش _MENU_ ردیف",
+            info: "نمایش _START_ تا _END_ از _TOTAL_ ردیف",
+            paginate: { previous: "قبلی", next: "بعدی" },
+            emptyTable: "هیچ کالایی ثبت نشده"
+        },
+        pageLength: 25,
+        order: [[0, 'asc']]
+    });
+    
+    $('#searchItem').on('keyup', function() {
+        table.search(this.value).draw();
+    });
+});
+
+function editItem(id, name, unit, buyPrice, initialStock, currentStock, minStock) {
+    document.getElementById('editItemForm').action = '/inventory/edit/' + id;
+    document.getElementById('edit_name').value = name;
+    document.getElementById('edit_unit').value = unit;
+    document.getElementById('edit_buy_price').value = buyPrice.toLocaleString('en');
+    document.getElementById('edit_initial_stock').value = initialStock;
+    document.getElementById('edit_current_stock').value = currentStock;
+    document.getElementById('edit_min_stock').value = minStock;
+    new bootstrap.Modal(document.getElementById('editItemModal')).show();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}گزارش اشخاص - حسابداری شخصی{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h4><i class="bi bi-people text-primary"></i> گزارش اشخاص</h4>
+    </div>
+</div>
+
+<!-- فیلتر -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('person_report') }}">
+            <div class="row align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">نام شخص / شرکت:</label>
+                    <input type="text" name="person" class="form-control" list="personList"
+                           value="{{ selected_person }}" placeholder="تایپ یا انتخاب کنید...">
+                    <datalist id="personList">
+                        {% for ent in entities %}
+                        <option value="{{ ent }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> نمایش گزارش
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if selected_person %}
+<!-- خلاصه -->
+<div class="row mb-3">
+    <div class="col-md-4">
+        <div class="summary-card">
+            <h5>کل واریزی شخص</h5>
+            <div class="value text-success">{{ "{:,.0f}".format(total_v) }} ریال</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="summary-card">
+            <h5>کل برداشت شخص</h5>
+            <div class="value text-danger">{{ "{:,.0f}".format(total_b) }} ریال</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="summary-card">
+            <h5>تراز حساب شخص</h5>
+            <div class="value {{ 'text-success' if (total_v - total_b) >= 0 else 'text-danger' }}">
+                {{ "{:,.0f}".format(total_v - total_b) }} ریال
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- جدول -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="personTable" class="table table-hover table-striped" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>تاریخ</th>
+                        <th>نوع</th>
+                        <th>حساب</th>
+                        <th>دسته‌بندی</th>
+                        <th>شخص</th>
+                        <th>مبلغ</th>
+                        <th>توضیحات</th>
+                        <th>تگ‌ها</th>
+                        <th>عملیات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in transactions %}
+                    <tr>
+                        <td>{{ tx.date }}</td>
+                        <td>
+                            <span class="badge {{ 'bg-success' if tx.type == 'واریز' else 'bg-danger' }}">
+                                {{ tx.type }}
+                            </span>
+                        </td>
+                        <td>{{ tx.account }}</td>
+                        <td>{{ tx.category }}</td>
+                        <td>{{ tx.entity }}</td>
+                        <td class="fw-bold {{ 'text-success' if tx.type == 'واریز' else 'text-danger' }}">
+                            {{ "{:,.0f}".format(tx.amount) }}
+                        </td>
+                        <td>{{ tx.description }}</td>
+                        <td>
+                            {% for tag in tx.tags %}
+                            <span class="badge bg-secondary">{{ tag }}</span>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('edit_transaction', tx_id=tx.id) }}" class="btn btn-sm btn-outline-primary" title="ویرایش">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-person-lines-fill text-muted" style="font-size: 3rem;"></i>
+        <p class="text-muted mt-3">نام شخص را انتخاب کنید تا گزارش نمایش داده شود.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#personTable').DataTable({
+        language: {
+            search: "جستجو:",
+            lengthMenu: "نمایش _MENU_ ردیف",
+            info: "نمایش _START_ تا _END_ از _TOTAL_ ردیف",
+            paginate: { previous: "قبلی", next: "بعدی" },
+            emptyTable: "هیچ تراکنشی یافت نشد"
+        },
+        pageLength: 25,
+        order: [[0, 'desc']],
+        columnDefs: [
+            { orderable: false, targets: 8 }
+        ]
+    });
+});
+</script>
+{% endblock %}

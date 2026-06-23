@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}ویرایش تراکنش - حسابداری شخصی{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pencil"></i> ویرایش تراکنش #{{ tx.id }}</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('edit_transaction', tx_id=tx.id) }}" method="POST" enctype="multipart/form-data">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">تاریخ *</label>
+                            <input type="text" name="date" class="form-control" value="{{ tx.date }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">نوع تراکنش *</label>
+                            <select name="type" class="form-select" required>
+                                <option value="برداشت" {{ 'selected' if tx.type == 'برداشت' }}>برداشت</option>
+                                <option value="واریز" {{ 'selected' if tx.type == 'واریز' }}>واریز</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">مبلغ (ریال) *</label>
+                            <input type="text" name="amount" class="form-control" value="{{ '{:,.0f}'.format(tx.amount|int) }}" required oninput="formatAmount(this)">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">حساب/صندوق</label>
+                            <select name="account" class="form-select">
+                                <option value="">انتخاب کنید...</option>
+                                {% for acc in accounts %}
+                                <option value="{{ acc }}" {{ 'selected' if tx.account == acc }}>{{ acc }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">دسته‌بندی</label>
+                            <select name="category" class="form-select">
+                                <option value="">انتخاب کنید...</option>
+                                {% for parent, subs in categories.items() %}
+                                <option value="{{ parent }}" {{ 'selected' if tx.category == parent }}>{{ parent }}</option>
+                                {% for sub in subs %}
+                                <option value="{{ sub }}" {{ 'selected' if tx.category == sub }}>&nbsp;&nbsp;└ {{ sub }}</option>
+                                {% endfor %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">شخص / محل *</label>
+                            <input type="text" name="entity" class="form-control" list="entityList" value="{{ tx.entity }}" required>
+                            <datalist id="entityList">
+                                {% for ent in entities %}
+                                <option value="{{ ent }}">
+                                {% endfor %}
+                            </datalist>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">توضیحات</label>
+                            <textarea name="description" class="form-control" rows="2">{{ tx.description }}</textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">تگ‌ها (با کاما جدا کنید)</label>
+                            <input type="text" name="tags" class="form-control" value="{{ tx.tags | join(', ') }}" placeholder="فوری, مهم, پروژه الف">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">فایل ضمیمه</label>
+                            {% if tx.attachment %}
+                            <div class="mb-2">
+                                <a href="{{ url_for('view_attachment', filename=tx.attachment) }}" class="text-primary" target="_blank">
+                                    <i class="bi bi-paperclip"></i> فایل فعلی
+                                </a>
+                                <input type="hidden" name="existing_attachment" value="{{ tx.attachment }}">
+                            </div>
+                            {% endif %}
+                            <input type="file" name="attachment" class="form-control" accept="*/*">
+                            <small class="text-muted">فایل جدید انتخاب کنید (اختیاری)</small>
+                        </div>
+                        
+                        <!-- بخش انبار -->
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="invEnabled" name="inv_enabled"
+                                       {{ 'checked' if inv_items else '' }}>
+                                <label class="form-check-label fw-bold" for="invEnabled">📦 ثبت در انبار (اختیاری)</label>
+                            </div>
+                        </div>
+                        <div id="inventorySection" class="col-12" style="{{ '' if inv_items else 'display:none;' }}">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-4">
+                                            <label class="form-label">نام کالا</label>
+                                            <input type="text" class="form-control inv-item-name" list="itemList" placeholder="نام کالا">
+                                            <datalist id="itemList">
+                                                {% for item in items %}
+                                                <option value="{{ item }}">
+                                                {% endfor %}
+                                            </datalist>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label">مقدار</label>
+                                            <input type="number" class="form-control inv-quantity" placeholder="0" step="any">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">قیمت واحد</label>
+                                            <input type="text" class="form-control inv-price" placeholder="0" oninput="formatAmount(this)">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <button type="button" class="btn btn-success btn-sm" onclick="addInvItem()">
+                                                <i class="bi bi-plus"></i> افزودن کالا
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <table class="table table-sm mt-2" id="invItemsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>کالا</th>
+                                                <th>مقدار</th>
+                                                <th>قیمت واحد</th>
+                                                <th>عملیات</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for inv in inv_items %}
+                                            <tr>
+                                                <td><input type="hidden" name="inv_item_name[]" value="{{ inv.name }}">{{ inv.name }}</td>
+                                                <td><input type="hidden" name="inv_quantity[]" value="{{ inv.quantity }}">{{ inv.quantity }}</td>
+                                                <td><input type="hidden" name="inv_price[]" value="{{ inv.unit_price|int }}">{{ "{:,.0f}".format(inv.unit_price) }}</td>
+                                                <td><button type="button" class="btn btn-sm btn-danger" onclick="this.closest('tr').remove()"><i class="bi bi-x"></i></button></td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> ذخیره تغییرات
+                        </button>
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-right"></i> بازگشت
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // نمایش/مخفی بخش انبار
+    document.getElementById('invEnabled').addEventListener('change', function() {
+        document.getElementById('inventorySection').style.display = this.checked ? 'block' : 'none';
+    });
+    
+    // ریست آرایه انبار برای صفحه ویرایش
+    window.invItems = [];
+</script>
+{% endblock %}

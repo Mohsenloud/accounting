@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}تراز مالی اشخاص - حسابداری شخصی{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h4><i class="bi bi-balance text-primary"></i> 💰 تراز مالی اشخاص</h4>
+    </div>
+</div>
+
+<!-- خلاصه -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <div class="summary-card">
+            <h5>بدهکار</h5>
+            <div class="value text-success">{{ debtor_count }} نفر</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="summary-card">
+            <h5>بستانکار</h5>
+            <div class="value text-danger">{{ creditor_count }} نفر</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="summary-card">
+            <h5>جمع بدهی</h5>
+            <div class="value text-success">{{ "{:,.0f}".format(total_debt) }} ریال</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="summary-card">
+            <h5>جمع بستانکاری</h5>
+            <div class="value text-danger">{{ "{:,.0f}".format(total_credit) }} ریال</div>
+        </div>
+    </div>
+</div>
+
+<!-- جستجو -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <label class="fw-bold">جستجوی شخص:</label>
+            </div>
+            <div class="col">
+                <input type="text" id="searchEntity" class="form-control form-control-sm" placeholder="نام شخص را تایپ کنید...">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- جدول اشخاص -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="balanceTable" class="table table-hover table-striped">
+                <thead>
+                    <tr>
+                        <th>نام شخص</th>
+                        <th>تراز (ریال)</th>
+                        <th>وضعیت</th>
+                        <th>ارزش انبار</th>
+                        <th>آخرین تاریخ</th>
+                        <th>توضیحات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entity in entities %}
+                    <tr class="entity-row" data-name="{{ entity.name }}" onclick="showDetail('{{ entity.name }}')" style="cursor:pointer;">
+                        <td class="fw-bold">{{ entity.name }}</td>
+                        <td class="fw-bold">{{ "{:,.0f}".format(entity.abs_balance) }}</td>
+                        <td>
+                            {% if entity.status == 'بدهکار' %}
+                            <span class="badge bg-success">بدهکار ✅</span>
+                            {% elif entity.status == 'بستانکار' %}
+                            <span class="badge bg-danger">بستانکار ❌</span>
+                            {% else %}
+                            <span class="badge bg-secondary">تسویه ⚖️</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if entity.inv_value > 0 %}
+                            <span class="text-warning fw-bold">{{ "{:,.0f}".format(entity.inv_value) }}</span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>{{ entity.last_date }}</td>
+                        <td>{{ entity.last_desc }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- بخش تسویه حساب -->
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-credit-card"></i> 💳 تسویه حساب با شخص</div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('entity_settle') }}">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">شخص:</label>
+                    <select name="entity" class="form-select" required>
+                        <option value="">انتخاب کنید...</option>
+                        {% for name in all_entities %}
+                        <option value="{{ name }}">{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">مبلغ:</label>
+                    <input type="text" name="amount" class="form-control" placeholder="مبلغ تسویه..." required oninput="formatAmount(this)">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">توضیح:</label>
+                    <input type="text" name="description" class="form-control" value="تسویه حساب" placeholder="توضیحات...">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-secondary" onclick="return confirm('آیا تسویه حساب ثبت شود؟')">
+                        <i class="bi bi-check-circle"></i> 💳 ثبت تسویه
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- جزئیات -->
+<div class="card mb-3" id="detailSection" style="display:none;">
+    <div class="card-header"><i class="bi bi-list-check"></i> 📋 جزئیات تراکنش‌های شخص</div>
+    <div class="card-body">
+        <div id="detailInfo" class="mb-3"></div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover" id="detailTable">
+                <thead>
+                    <tr>
+                        <th>تاریخ</th>
+                        <th>نوع</th>
+                        <th>مبلغ</th>
+                        <th>توضیحات</th>
+                        <th>حساب</th>
+                        <th>دسته</th>
+                        <th>عملیات</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div id="invDetailInfo" class="mt-3 mb-2 fw-bold text-warning"></div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover" id="invDetailTable">
+                <thead>
+                    <tr>
+                        <th>تاریخ</th>
+                        <th>کالا / واحد</th>
+                        <th>مقدار</th>
+                        <th>قیمت واحد</th>
+                        <th>نوع</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    var table = $('#balanceTable').DataTable({
+        language: {
+            search: "جستجو:",
+            lengthMenu: "نمایش _MENU_ ردیف",
+            info: "نمایش _START_ تا _END_ از _TOTAL_ ردیف",
+            paginate: { previous: "قبلی", next: "بعدی" },
+            emptyTable: "هیچ شخصی ثبت نشده"
+        },
+        pageLength: 50,
+        order: [[1, 'desc']]
+    });
+    
+    // جستجوی سفارشی
+    $('#searchEntity').on('keyup', function() {
+        table.search(this.value).draw();
+    });
+});
+
+function showDetail(name) {
+    fetch('/entity_balance/detail/' + encodeURIComponent(name))
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            document.getElementById('detailSection').style.display = 'block';
+            
+            var balanceText = '';
+            if (data.balance > 0) {
+                balanceText = name + ' → بدهکار: ' + data.balance.toLocaleString('fa') + ' ریال (طلب ما از شخص)';
+            } else if (data.balance < 0) {
+                balanceText = name + ' → بستانکار: ' + Math.abs(data.balance).toLocaleString('fa') + ' ریال (طلب شخص از ما)';
+            } else {
+                balanceText = name + ' → تسویه شده';
+            }
+            document.getElementById('detailInfo').innerHTML = '<span class="text-primary fw-bold">' + balanceText + '</span>';
+            
+            // جدول تراکنش‌ها
+            var tbody = document.querySelector('#detailTable tbody');
+            tbody.innerHTML = '';
+            data.transactions.forEach(function(tx) {
+                var typeClass = tx.type === 'واریز' ? 'text-success' : 'text-danger';
+                tbody.innerHTML += '<tr>' +
+                    '<td>' + tx.date + '</td>' +
+                    '<td class="' + typeClass + '">' + tx.type + '</td>' +
+                    '<td class="fw-bold">' + tx.amount.toLocaleString('fa') + '</td>' +
+                    '<td>' + tx.description + (tx.inventory_text ? '<br><small class="text-muted">' + tx.inventory_text + '</small>' : '') + '</td>' +
+                    '<td>' + tx.account + '</td>' +
+                    '<td>' + tx.category + '</td>' +
+                    '<td><a href="/transaction/edit/' + tx.id + '" class="btn btn-sm btn-outline-primary" title="ویرایش"><i class="bi bi-pencil"></i></a></td>' +
+                    '</tr>';
+            });
+            
+            // جدول انبار
+            var invTbody = document.querySelector('#invDetailTable tbody');
+            invTbody.innerHTML = '';
+            var totalEntryQty = 0, totalExitQty = 0, totalEntryValue = 0, totalExitValue = 0;
+            
+            data.inventory.forEach(function(inv) {
+                var typeLabel = inv.type === 'entry' ? 'ورود ✅' : 'خروج ❌';
+                var typeColor = inv.type === 'entry' ? 'text-success' : 'text-danger';
+                if (inv.type === 'entry') { totalEntryQty += inv.quantity; totalEntryValue += inv.quantity * inv.unit_price; }
+                else { totalExitQty += inv.quantity; totalExitValue += inv.quantity * inv.unit_price; }
+                
+                invTbody.innerHTML += '<tr>' +
+                    '<td>' + inv.date + '</td>' +
+                    '<td>' + inv.item_name + ' (' + inv.unit + ')</td>' +
+                    '<td>' + inv.quantity.toLocaleString('fa') + '</td>' +
+                    '<td>' + inv.unit_price.toLocaleString('fa') + '</td>' +
+                    '<td class="' + typeColor + '">' + typeLabel + '</td>' +
+                    '</tr>';
+            });
+            
+            if (data.inventory.length > 0) {
+                document.getElementById('invDetailInfo').innerHTML = '📦 جزئیات انبار (' + data.inventory.length + ' ردیف) - ورود: ' + totalEntryQty.toLocaleString('fa') + ' | خروج: ' + totalExitQty.toLocaleString('fa');
+            } else {
+                document.getElementById('invDetailInfo').innerHTML = '📦 جزئیات انبار: هیچ رکوردی ثبت نشده';
+            }
+            
+            document.getElementById('detailSection').scrollIntoView({ behavior: 'smooth' });
+        });
+}
+</script>
+{% endblock %}

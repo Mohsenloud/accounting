@@ -1,0 +1,510 @@
+{% extends "base.html" %}
+{% block title %}مدیریت تراکنش‌ها - حسابداری شخصی{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h4 class="mb-0"><i class="bi bi-list-ul text-primary"></i> مدیریت تراکنش‌ها</h4>
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTransactionModal">
+                    <i class="bi bi-plus-circle"></i> ثبت تراکنش
+                </button>
+                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#manageAccountsModal">
+                    <i class="bi bi-wallet2"></i> حساب‌ها
+                </button>
+                <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal">
+                    <i class="bi bi-tags"></i> دسته‌بندی‌ها
+                </button>
+                <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#manageEntitiesModal">
+                    <i class="bi bi-people"></i> اشخاص
+                </button>
+                <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#manageTagsModal">
+                    <i class="bi bi-hash"></i> تگ‌ها
+                </button>
+                <form action="{{ url_for('import_excel') }}" method="POST" enctype="multipart/form-data" class="d-inline">
+                    <label class="btn btn-outline-success">
+                        <i class="bi bi-upload"></i> ایمپورت اکسل
+                        <input type="file" name="file" accept=".xlsx,.xls" hidden onchange="this.form.submit()">
+                    </label>
+                </form>
+                <a href="{{ url_for('export_transactions') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-download"></i> خروجی اکسل
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- جستجو -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <label class="fw-bold">جستجوی سریع:</label>
+            </div>
+            <div class="col-auto">
+                <select id="searchColumn" class="form-select form-select-sm">
+                    {% for h in headers %}
+                    <option value="{{ loop.index0 }}">{{ h }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col">
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="تایپ کنید...">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- خلاصه -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <div class="summary-card">
+            <h5>تعداد رکورد</h5>
+            <div class="value text-primary" id="totalCount">{{ transactions|length }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="summary-card">
+            <h5>جمع واریز</h5>
+            <div class="value text-success" id="totalDeposit">۰</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="summary-card">
+            <h5>جمع برداشت</h5>
+            <div class="value text-danger" id="totalWithdrawal">۰</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="summary-card">
+            <h5>تراز</h5>
+            <div class="value text-primary" id="balance">۰</div>
+        </div>
+    </div>
+</div>
+
+<!-- جدول تراکنش‌ها -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="transactionsTable" class="table table-hover table-striped" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>تاریخ</th>
+                        <th>نوع</th>
+                        <th>حساب</th>
+                        <th>دسته‌بندی</th>
+                        <th>شخص</th>
+                        <th>مبلغ</th>
+                        <th>توضیحات</th>
+                        <th>تگ‌ها</th>
+                        <th>عملیات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in transactions %}
+                    <tr>
+                        <td>{{ tx.date }}</td>
+                        <td>
+                            <span class="badge {{ 'bg-success' if tx.type == 'واریز' else 'bg-danger' }}">
+                                {{ tx.type }}
+                            </span>
+                        </td>
+                        <td>{{ tx.account }}</td>
+                        <td>{{ tx.category }}</td>
+                        <td>{{ tx.entity }}</td>
+                        <td class="fw-bold {{ 'text-success' if tx.type == 'واریز' else 'text-danger' }}">
+                            {{ "{:,.0f}".format(tx.amount) }}
+                        </td>
+                        <td>{{ tx.description }}</td>
+                        <td>
+                            {% for tag in tx.tags %}
+                            <span class="badge bg-secondary">{{ tag }}</span>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                {% if tx.attachment %}
+                                <a href="{{ url_for('view_attachment', filename=tx.attachment) }}" class="btn btn-outline-warning" title="مشاهده ضمیمه" target="_blank">
+                                    <i class="bi bi-paperclip"></i>
+                                </a>
+                                {% endif %}
+                                <button class="btn btn-outline-primary" onclick="editTransaction({{ tx.id }})" title="ویرایش">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <form action="{{ url_for('delete_transaction', tx_id=tx.id) }}" method="POST" class="d-inline" onsubmit="return confirm('آیا از حذف این تراکنش مطمئن هستید؟')">
+                                    <button type="submit" class="btn btn-outline-danger" title="حذف">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- مودال ثبت تراکنش جدید -->
+<div class="modal fade" id="addTransactionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form action="{{ url_for('add_transaction') }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-plus-circle"></i> ثبت تراکنش جدید</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">تاریخ *</label>
+                            <input type="text" name="date" class="form-control" placeholder="1403/01/01" required
+                                   value="{{ today_date if today_date else '' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">نوع تراکنش *</label>
+                            <select name="type" class="form-select" required>
+                                <option value="برداشت">برداشت</option>
+                                <option value="واریز">واریز</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">مبلغ (ریال) *</label>
+                            <input type="text" name="amount" class="form-control" placeholder="0" required oninput="formatAmount(this)">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">حساب/صندوق</label>
+                            <select name="account" class="form-select">
+                                <option value="">انتخاب کنید...</option>
+                                {% for acc in accounts %}
+                                <option value="{{ acc }}">{{ acc }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">دسته‌بندی</label>
+                            <select name="category" class="form-select">
+                                <option value="">انتخاب کنید...</option>
+                                {% for parent, subs in categories.items() %}
+                                <option value="{{ parent }}">{{ parent }}</option>
+                                {% for sub in subs %}
+                                <option value="{{ sub }}">&nbsp;&nbsp;└ {{ sub }}</option>
+                                {% endfor %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">شخص / محل *</label>
+                            <input type="text" name="entity" class="form-control" list="entityList" required placeholder="تایپ یا انتخاب...">
+                            <datalist id="entityList">
+                                {% for ent in entities %}
+                                <option value="{{ ent }}">
+                                {% endfor %}
+                            </datalist>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">توضیحات</label>
+                            <textarea name="description" class="form-control" rows="2" placeholder="توضیحات..."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">تگ‌ها (با کاما جدا کنید)</label>
+                            <input type="text" name="tags" class="form-control" placeholder="فوری, مهم, پروژه الف">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">فایل ضمیمه</label>
+                            <input type="file" name="attachment" class="form-control" accept="*/*">
+                        </div>
+                        
+                        <!-- بخش انبار -->
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="invEnabled" name="inv_enabled">
+                                <label class="form-check-label fw-bold" for="invEnabled">📦 ثبت در انبار (اختیاری)</label>
+                            </div>
+                        </div>
+                        <div id="inventorySection" class="col-12" style="display:none;">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-4">
+                                            <label class="form-label">نام کالا</label>
+                                            <input type="text" class="form-control inv-item-name" list="itemList" placeholder="نام کالا">
+                                            <datalist id="itemList">
+                                                {% for item in items %}
+                                                <option value="{{ item }}">
+                                                {% endfor %}
+                                            </datalist>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label">مقدار</label>
+                                            <input type="number" class="form-control inv-quantity" placeholder="0" step="any">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">قیمت واحد</label>
+                                            <input type="text" class="form-control inv-price" placeholder="0" oninput="formatAmount(this)">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <button type="button" class="btn btn-success btn-sm" onclick="addInvItem()">
+                                                <i class="bi bi-plus"></i> افزودن کالا
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <table class="table table-sm mt-2" id="invItemsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>کالا</th>
+                                                <th>مقدار</th>
+                                                <th>قیمت واحد</th>
+                                                <th>عملیات</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">انصراف</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> ذخیره</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- مودال مدیریت حساب‌ها -->
+<div class="modal fade" id="manageAccountsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-wallet2"></i> مدیریت حساب‌ها</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ url_for('add_account') }}" method="POST" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" name="name" class="form-control" placeholder="نام حساب جدید..." required>
+                        <button type="submit" class="btn btn-success">افزودن</button>
+                    </div>
+                </form>
+                <div class="list-group" style="max-height:300px;overflow-y:auto;">
+                    {% for acc in accounts %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ acc }}
+                        <form action="{{ url_for('delete_account') }}" method="POST" class="d-inline">
+                            <input type="hidden" name="name" value="{{ acc }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('حذف شود؟')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- مودال مدیریت دسته‌بندی‌ها -->
+<div class="modal fade" id="manageCategoriesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-tags"></i> مدیریت دسته‌بندی‌ها</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ url_for('add_category') }}" method="POST" class="mb-3">
+                    <label class="form-label fw-bold">دسته اصلی:</label>
+                    <div class="input-group">
+                        <input type="text" name="name" class="form-control" placeholder="نام دسته‌بندی..." required>
+                        <button type="submit" class="btn btn-success">افزودن</button>
+                    </div>
+                </form>
+                <form action="{{ url_for('add_subcategory') }}" method="POST" class="mb-3">
+                    <label class="form-label fw-bold">زیردسته:</label>
+                    <div class="input-group">
+                        <select name="parent" class="form-select" required>
+                            <option value="">انتخاب والد...</option>
+                            {% for parent in categories.keys() %}
+                            <option value="{{ parent }}">{{ parent }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="text" name="name" class="form-control" placeholder="نام زیردسته..." required>
+                        <button type="submit" class="btn btn-primary">افزودن</button>
+                    </div>
+                </form>
+                <div class="list-group" style="max-height:300px;overflow-y:auto;">
+                    {% for parent, subs in categories.items() %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold">📁 {{ parent }}</span>
+                            <form action="{{ url_for('delete_category') }}" method="POST" class="d-inline">
+                                <input type="hidden" name="name" value="{{ parent }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('حذف شود؟')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% for sub in subs %}
+                        <div class="d-flex justify-content-between align-items-center ms-4 mt-1">
+                            <span>📂 {{ sub }}</span>
+                            <form action="{{ url_for('delete_category') }}" method="POST" class="d-inline">
+                                <input type="hidden" name="name" value="{{ sub }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('حذف شود؟')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- مودال مدیریت اشخاص -->
+<div class="modal fade" id="manageEntitiesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-people"></i> مدیریت اشخاص</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ url_for('add_entity') }}" method="POST" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" name="name" class="form-control" placeholder="نام شخص یا شرکت..." required>
+                        <button type="submit" class="btn btn-success">افزودن</button>
+                    </div>
+                </form>
+                <div class="list-group" style="max-height:300px;overflow-y:auto;">
+                    {% for ent in entities %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ ent }}
+                        <form action="{{ url_for('delete_entity') }}" method="POST" class="d-inline">
+                            <input type="hidden" name="name" value="{{ ent }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('حذف شود؟')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- مودال مدیریت تگ‌ها -->
+<div class="modal fade" id="manageTagsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-hash"></i> مدیریت تگ‌ها</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ url_for('add_tag') }}" method="POST" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" name="name" class="form-control" placeholder="نام تگ جدید..." required>
+                        <button type="submit" class="btn btn-success">افزودن</button>
+                    </div>
+                </form>
+                <div class="list-group" style="max-height:300px;overflow-y:auto;">
+                    {% for tag in tags %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span class="badge bg-secondary">{{ tag }}</span>
+                        <form action="{{ url_for('delete_tag') }}" method="POST" class="d-inline">
+                            <input type="hidden" name="name" value="{{ tag }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('حذف شود؟')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // DataTables
+    $(document).ready(function() {
+        var table = $('#transactionsTable').DataTable({
+            language: {
+                search: "جستجو:",
+                lengthMenu: "نمایش _MENU_ ردیف",
+                info: "نمایش _START_ تا _END_ از _TOTAL_ ردیف",
+                paginate: { previous: "قبلی", next: "بعدی" },
+                emptyTable: "هیچ تراکنشی ثبت نشده"
+            },
+            pageLength: 25,
+            order: [[0, 'desc']],
+            columnDefs: [
+                { orderable: false, targets: 8 }
+            ]
+        });
+        
+        // جستجوی سفارشی
+        $('#searchInput').on('keyup', function() {
+            var colIndex = $('#searchColumn').val();
+            table.column(colIndex).search(this.value).draw();
+        });
+        
+        // محاسبه خلاصه
+        function updateSummary() {
+            var totalDeposit = 0, totalWithdrawal = 0, count = 0;
+            table.rows({ search: 'applied' }).every(function() {
+                var data = this.node();
+                var type = $(data).find('td:eq(1)').text().trim();
+                var amountText = $(data).find('td:eq(5)').text().trim().replace(/,/g, '');
+                var amount = parseFloat(amountText) || 0;
+                count++;
+                if (type === 'واریز') totalDeposit += amount;
+                else if (type === 'برداشت') totalWithdrawal += amount;
+            });
+            $('#totalCount').text(count.toLocaleString('fa'));
+            $('#totalDeposit').text(totalDeposit.toLocaleString('fa') + ' ریال');
+            $('#totalWithdrawal').text(totalWithdrawal.toLocaleString('fa') + ' ریال');
+            var bal = totalDeposit - totalWithdrawal;
+            $('#balance').text(bal.toLocaleString('fa') + ' ریال');
+            $('#balance').removeClass('text-success text-danger').addClass(bal >= 0 ? 'text-success' : 'text-danger');
+        }
+        
+        table.on('draw', updateSummary);
+        updateSummary();
+    });
+    
+    // نمایش/مخفی بخش انبار
+    document.getElementById('invEnabled').addEventListener('change', function() {
+        document.getElementById('inventorySection').style.display = this.checked ? 'block' : 'none';
+    });
+    
+    // ویرایش تراکنش
+    function editTransaction(txId) {
+        window.location.href = '/transaction/edit/' + txId;
+    }
+    
+    // ریست فرم هنگام بستن modal
+    document.getElementById('addTransactionModal').addEventListener('hidden.bs.modal', function () {
+        this.querySelector('form').reset();
+        window.invItems = [];
+        var tbody = document.querySelector('#invItemsTable tbody');
+        if (tbody) tbody.innerHTML = '';
+        document.getElementById('inventorySection').style.display = 'none';
+    });
+</script>
+{% endblock %}

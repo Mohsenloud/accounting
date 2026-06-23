@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}پشتیبان‌گیری - حسابداری شخصی{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h4><i class="bi bi-cloud-download text-primary"></i> پشتیبان‌گیری و بازیابی</h4>
+    </div>
+</div>
+
+<!-- بکاپ کامل -->
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-database"></i> 💾 بکاپ کامل دیتابیس (روش پیشنهادی)</div>
+    <div class="card-body">
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('backup_full') }}" class="btn btn-success" onclick="return confirm('بکاپ کامل ساخته شود؟')">
+                <i class="bi bi-download"></i> 📦 بکاپ کامل
+            </a>
+            <form action="{{ url_for('backup_restore') }}" method="POST" enctype="multipart/form-data" class="d-inline">
+                <label class="btn btn-danger" onclick="return confirm('⚠️ تمام اطلاعات فعلی بازنویسی خواهد شد! آیا مطمئن هستید؟')">
+                    <i class="bi bi-upload"></i> 🔄 بازیابی کامل
+                    <input type="file" name="file" accept=".db" hidden onchange="this.form.submit()">
+                </label>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- لیست بکاپ‌های موجود -->
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-folder"></i> 📁 بکاپ‌های موجود</div>
+    <div class="card-body">
+        {% if backups %}
+        <div class="table-responsive">
+            <table class="table table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>نام فایل</th>
+                        <th>تاریخ</th>
+                        <th>اندازه</th>
+                        <th>عملیات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in backups %}
+                    <tr>
+                        <td>{{ b.name }}</td>
+                        <td>{{ b.date }}</td>
+                        <td>{{ b.size }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('backup_download', filename=b.name) }}" class="btn btn-outline-primary" title="دانلود">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                                <a href="{{ url_for('backup_restore_file', filename=b.name) }}" class="btn btn-outline-warning" title="بازیابی" onclick="return confirm('آیا از این فایل بازیابی شود؟')">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-3">هنوز بکاپی ثبت نشده است.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- بکاپ JSON تعاریف -->
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-filetype-json"></i> 📋 بکاپ JSON تعاریف + انبار</div>
+    <div class="card-body">
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('backup_definitions_export') }}" class="btn btn-secondary">
+                <i class="bi bi-download"></i> دریافت تعاریف (Export)
+            </a>
+            <form action="{{ url_for('backup_definitions_import') }}" method="POST" enctype="multipart/form-data" class="d-inline">
+                <label class="btn btn-secondary">
+                    <i class="bi bi-upload"></i> بازیابی تعاریف (Import)
+                    <input type="file" name="file" accept=".json" hidden onchange="this.form.submit()">
+                </label>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- بکاپ JSON تراکنش‌ها -->
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-filetype-json"></i> 📄 بکاپ JSON تراکنش‌ها + انبار</div>
+    <div class="card-body">
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('backup_transactions_export') }}" class="btn btn-info">
+                <i class="bi bi-download"></i> دریافت تراکنش‌ها (Export)
+            </a>
+            <form action="{{ url_for('backup_transactions_import') }}" method="POST" enctype="multipart/form-data" class="d-inline">
+                <label class="btn btn-info">
+                    <i class="bi bi-upload"></i> بازیابی تراکنش‌ها (Import)
+                    <input type="file" name="file" accept=".json" hidden onchange="this.form.submit()">
+                </label>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- تغییر رمز عبور -->
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-key"></i> 🔒 تغییر رمز عبور</div>
+    <div class="card-body">
+        <form action="{{ url_for('change_password') }}" method="POST">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">رمز عبور فعلی:</label>
+                    <input type="password" name="current_password" class="form-control" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">رمز عبور جدید:</label>
+                    <input type="password" name="new_password" class="form-control" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">تکرار رمز جدید:</label>
+                    <input type="password" name="confirm_password" class="form-control" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-warning mt-3" onclick="return confirm('آیا رمز عبور تغییر کند؟')">
+                <i class="bi bi-key"></i> تغییر رمز عبور
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- راهنما -->
+<div class="card mb-3">
+    <div class="card-body">
+        <h6 class="fw-bold">راهنما:</h6>
+        <ul class="mb-0">
+            <li><strong>بکاپ کامل:</strong> بهترین روش - کل دیتابیس را کپی می‌کند</li>
+            <li><strong>بکاپ JSON:</strong> قابل بازیابی جزئی - شامل انبار و تگ‌ها نیز می‌شود</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

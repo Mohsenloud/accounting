@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}گزارش پیشرفته - حسابداری شخصی{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h4><i class="bi bi-graph-up text-primary"></i> گزارش پیشرفته</h4>
+    </div>
+</div>
+
+<!-- فیلترها -->
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-funnel"></i> فیلترهای ترکیبی</div>
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('report') }}" id="filterForm">
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">نوع</label>
+                    <select name="type" class="form-select" onchange="this.form.submit()">
+                        <option value="همه" {{ 'selected' if selected_type == 'همه' }}>همه</option>
+                        <option value="واریز" {{ 'selected' if selected_type == 'واریز' }}>واریز</option>
+                        <option value="برداشت" {{ 'selected' if selected_type == 'برداشت' }}>برداشت</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">حساب</label>
+                    <select name="account" class="form-select" onchange="this.form.submit()">
+                        <option value="همه" {{ 'selected' if selected_account == 'همه' }}>همه</option>
+                        {% for acc in accounts %}
+                        <option value="{{ acc }}" {{ 'selected' if selected_account == acc }}>{{ acc }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">دسته</label>
+                    <select name="category" class="form-select" onchange="this.form.submit()">
+                        <option value="همه" {{ 'selected' if selected_category == 'همه' }}>همه</option>
+                        {% for parent, subs in categories.items() %}
+                        <option value="{{ parent }}" {{ 'selected' if selected_category == parent }}>{{ parent }}</option>
+                        {% for sub in subs %}
+                        <option value="{{ sub }}" {{ 'selected' if selected_category == sub }}>&nbsp;&nbsp;└ {{ sub }}</option>
+                        {% endfor %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">تگ</label>
+                    <select name="tag" class="form-select" onchange="this.form.submit()">
+                        <option value="همه" {{ 'selected' if selected_tag == 'همه' }}>همه</option>
+                        {% for tag in tags %}
+                        <option value="{{ tag }}" {{ 'selected' if selected_tag == tag }}>{{ tag }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">شخص / محل</label>
+                    <input type="text" name="entity" class="form-control" value="{{ selected_entity }}" 
+                           placeholder="تایپ کنید..." onchange="this.form.submit()">
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- خلاصه -->
+<div class="row mb-3">
+    <div class="col-md-4">
+        <div class="summary-card">
+            <h5>جمع واریز</h5>
+            <div class="value text-success">{{ "{:,.0f}".format(total_v) }} ریال</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="summary-card">
+            <h5>جمع برداشت</h5>
+            <div class="value text-danger">{{ "{:,.0f}".format(total_b) }} ریال</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="summary-card">
+            <h5>تراز</h5>
+            <div class="value {{ 'text-success' if (total_v - total_b) >= 0 else 'text-danger' }}">
+                {{ "{:,.0f}".format(total_v - total_b) }} ریال
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- دکمه خروجی -->
+<div class="mb-3">
+    <a href="{{ url_for('export_report', type=selected_type, account=selected_account, category=selected_category, entity=selected_entity, tag=selected_tag) }}" 
+       class="btn btn-success">
+        <i class="bi bi-file-earmark-excel"></i> خروجی اکسل این گزارش
+    </a>
+</div>
+
+<!-- جدول -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="reportTable" class="table table-hover table-striped" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>تاریخ</th>
+                        <th>نوع</th>
+                        <th>حساب</th>
+                        <th>دسته‌بندی</th>
+                        <th>شخص</th>
+                        <th>مبلغ</th>
+                        <th>توضیحات</th>
+                        <th>تگ‌ها</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in transactions %}
+                    <tr>
+                        <td>{{ tx.date }}</td>
+                        <td>
+                            <span class="badge {{ 'bg-success' if tx.type == 'واریز' else 'bg-danger' }}">
+                                {{ tx.type }}
+                            </span>
+                        </td>
+                        <td>{{ tx.account }}</td>
+                        <td>{{ tx.category }}</td>
+                        <td>{{ tx.entity }}</td>
+                        <td class="fw-bold {{ 'text-success' if tx.type == 'واریز' else 'text-danger' }}">
+                            {{ "{:,.0f}".format(tx.amount) }}
+                        </td>
+                        <td>{{ tx.description }}</td>
+                        <td>
+                            {% for tag in tx.tags %}
+                            <span class="badge bg-secondary">{{ tag }}</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#reportTable').DataTable({
+        language: {
+            search: "جستجو:",
+            lengthMenu: "نمایش _MENU_ ردیف",
+            info: "نمایش _START_ تا _END_ از _TOTAL_ ردیف",
+            paginate: { previous: "قبلی", next: "بعدی" },
+            emptyTable: "هیچ داده‌ای یافت نشد"
+        },
+        pageLength: 25,
+        order: [[0, 'desc']]
+    });
+});
+</script>
+{% endblock %}
